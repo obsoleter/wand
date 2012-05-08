@@ -555,6 +555,58 @@ class Image(Resource):
         if not result:
             self.raise_exception()
 
+    def watermark(self, image=None, blob=None, file=None, filename=None,
+                  opacity=0.0, xoffset=0, yoffset=0):
+        """Applies a watermark to the image. It takes any of the
+        :class:`wand.image.Image` constructor parameters for the watermark
+        image being applied to this.
+
+        :param image: makes an exact copy of the ``image``
+        :type image: :class:`Image`
+        :param blob: opens an image of the ``blob`` byte array
+        :type blob: :class:`str`
+        :param file: opens an image of the ``file`` object
+        :type file: file object
+        :param filename: opens an image of the ``filename`` string
+        :type filename: :class:`basestring`
+        :param opacity: an optional percentage indicating visibility of the
+                        watermark where 0.0 is opaque and 1.0 is invisible.
+                        default is 0.0
+        :type opacity: :class:`numbers.Real`
+        :param xoffset: an optional x-offset for the watermark placement with
+                        respect to the original image.
+        :type xoffset: :class:`numbers.Integral`
+        :param yoffset: an optional x-offset for the watermark placement with
+                        respect to the original image. 
+        :type yoffset: :class:`numbers.Integral`
+        """
+        locs = dict(locals())
+        img_keys = ['image', 'blob', 'file', 'filename']
+        kwargs = {k: locs[k] for k in locs if k in img_keys}
+        water_img = Image(**kwargs)
+
+        quantum_range = ctypes.c_size_t()
+        library.MagickGetQuantumRange(ctypes.byref(quantum_range))
+
+        op = ctypes.c_double(float(quantum_range.value * float(opacity)))
+        if op.value > quantum_range.value or op.value < 0:
+            raise ValueError('opacity must be a numbers.Real value between' +
+                             '0.0 and 1.0')
+        elif not isinstance(xoffset, numbers.Integral): 
+            raise ValueError('xoffset must be a numbers.Integral, not ' +
+                             repr(xoffset))
+        elif not isinstance(yoffset, numbers.Integral): 
+            raise ValueError('yoffset must be a numbers.Integral, not ' +
+                             repr(yoffset))
+
+        # Prepare watermark image
+        library.MagickSetIteratorIndex(water_img.wand, 0)
+        library.MagickSetImageType(water_img.wand, 7)
+        library.MagickEvaluateImageChannel(water_img.wand, 8, 11, op)
+        # Make composite image
+        r = library.MagickCompositeImage(self.wand, water_img.wand, 45, xoffset,
+                                     yoffset)
+
     def save(self, file=None, filename=None):
         """Saves the image into the ``file`` or ``filename``. It takes
         only one argument at a time.
